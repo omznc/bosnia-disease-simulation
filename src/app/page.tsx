@@ -1,10 +1,17 @@
 'use client';
 
-import {GeoJSON, MapContainer, Marker} from 'react-leaflet';
 import cantonDataJson from '@/../public/bosnia.json';
 import {useCallback, useEffect, useRef, useState} from "react";
 import {toast, Toaster} from "react-hot-toast";
-import {Popup} from "leaflet";
+import dynamic from "next/dynamic";
+
+const GeoJSON = dynamic(() => import('react-leaflet').then(c => c.GeoJSON), {
+	ssr: false
+})
+const MapContainer = dynamic(() => import('react-leaflet').then(c => c.MapContainer), {
+	ssr: false
+})
+
 
 interface FeatureProperties {
 	id_2: string;
