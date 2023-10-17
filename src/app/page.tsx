@@ -1,6 +1,6 @@
 'use client';
 
-import cantonDataJson from '@/../public/bosnia.json';
+import bosniaDataJson from '../../public/bosnia.json';
 import {useCallback, useEffect, useRef, useState} from "react";
 import {toast, Toaster} from "react-hot-toast";
 import dynamic from "next/dynamic";
@@ -18,6 +18,7 @@ interface FeatureProperties {
 	name_0: string;
 	name_1: string;
 	name_2: string;
+	name_3: string;
 	type_2: string;
 	engtype_2: string;
 }
@@ -298,7 +299,7 @@ export default function Home() {
 				bounceAtZoomLimits={true} wheelPxPerZoomLevel={300}
 			>
 				<GeoJSON
-					data={cantonDataJson as any}
+					data={bosniaDataJson as any}
 					onEachFeature={(feature, layer) => {
 						layer.on({
 							mouseover: (e) => {
@@ -334,20 +335,22 @@ export default function Home() {
 								const red = Math.floor(percentage * 255);
 								const green = Math.floor((0.8 - percentage) * 255);
 								return `rgb(${green}, ${red}, 0)`;
-							})()
+							})(),
+							weight: "1",
 						};
 					}}
 					// @ts-ignore
 					className={'pointer-events-auto'}
 				/>
 			</MapContainer>
+
 			<div
 				className={`absolute flex bottom-0 transition-all px-4 left-0 right-0 bg-neutral-800 ${
 					hoveredCanton ? 'py-4' : 'py-0'
 				}`}>
 				<div className={'flex flex-col w-1/2'}>
-					<h1 className={'text-2xl text-white font-bold'}>{hoveredCanton?.name_2}</h1>
-					<p className={'text-gray-200'}>{hoveredCanton?.name_1}</p>
+					<h1 className={'text-2xl text-white font-bold'}>{hoveredCanton?.name_3}</h1>
+					<p className={'text-gray-200'}>{hoveredCanton?.name_2}</p>
 				</div>
 				<div className={`flex flex-col justify-end items-end transition-all w-1/2 ${
 					!sidebarOpen ? 'mr-[500px]' : 'mr-0'
@@ -389,17 +392,6 @@ export default function Home() {
 								   placeholder={disease.name}
 							/>
 						</div>
-						{/*<div className={'flex flex-col gap-1'}>*/}
-						{/*	<label htmlFor="disease-incubation-time" className={'text-gray-200'}>Incubation time</label>*/}
-						{/*	<input type="number" className={'bg-neutral-800 rounded-lg text-white p-2'}*/}
-						{/*		   onChange={(e) => {*/}
-						{/*			   if (!e.target.value) return;*/}
-						{/*			   setDisease({...disease, incubationTime: parseInt(e.target.value)});*/}
-						{/*		   }*/}
-						{/*		   }*/}
-						{/*		   placeholder={disease.incubationTime.toString()}*/}
-						{/*	/>*/}
-						{/*</div>*/}
 						<div className={'flex flex-col gap-1'}>
 							<label htmlFor="disease-immunity-time" className={'text-gray-200'}>Immunity time</label>
 							<input type="number" className={'bg-neutral-800 rounded-lg text-white p-2'}
