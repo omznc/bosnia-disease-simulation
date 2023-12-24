@@ -11,6 +11,8 @@
   "dependencies": {
     "@mui/material": "^5.14.13",
     "leaflet": "^1.9.4",
+    "leaflet-geometryutil": "^0.10.2",
+    "leaflet-knn": "^0.1.0",
     "next": "13.5.5",
     "react": "^18",
     "react-dom": "^18",
