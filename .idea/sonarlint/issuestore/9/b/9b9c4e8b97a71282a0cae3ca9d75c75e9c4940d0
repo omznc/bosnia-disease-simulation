@@ -1,0 +1,5 @@
+
+utypescript:S4325X"RThis assertion is unnecessary since it does not change the type of the expression.(¸ÎÀé8á·¢òÏ1
+utypescript:S4325Y"RThis assertion is unnecessary since it does not change the type of the expression.(ÆçúÉ8á·¢òÏ1
+xtypescript:S3776­"TRefactor this function to reduce its Cognitive Complexity from 47 to the 15 allowed.(ÄïÔ8á·¢òÏ1
+typescript:S6606·"jPrefer using nullish coalescing operator (`??`) instead of a logical or (`||`), as it is a safer operator.(•»»ë8â·¢òÏ1

@@ -36,10 +36,7 @@ interface FeatureProperties {
 }
 
 interface FeatureData extends FeatureProperties {
-	population: number;
-	infected: number;
-	immune: number;
-	dead: number;
+	people: Person[];
 	hasDistancing: boolean;
 	hasMasks: boolean;
 	hasLockdown: boolean;
@@ -49,10 +46,17 @@ interface FeatureData extends FeatureProperties {
 
 interface Disease {
 	name: string;
-	immunityTime: number;
 	lethality: number;
 	requiredVaccines: number;
 	virability: number;
+	incubationTime: number; // in seconds
+}
+
+interface Person {
+	infected: boolean;
+	infectedAt: number;
+	immune: boolean;
+	dead: boolean;
 }
 
 // @ts-ignore
@@ -68,10 +72,19 @@ export default function Home() {
 	const regionDataMemoized = (regionDataJson as any).features.map((feature: any) => {
 		return {
 			...feature.properties,
-			population: Math.floor(Math.random() * 10000),
-			infected: 0,
-			immune: 0,
-			dead: 0,
+			// population: Math.floor(Math.random() * 10000),
+			// infected: 0,
+			// immune: 0,
+			// dead: 0,
+			// we use actual people now
+			people: Array.from({length: Math.floor(Math.random() * 10000)}, () => {
+				return {
+					infected: false,
+					infectedAt: 0,
+					immune: false,
+					dead: false,
+				}
+			}),
 			longitude: getCenterFromBounds(feature.bbox as any)[1],
 			latitude: getCenterFromBounds(feature.bbox as any)[0],
 		}
@@ -79,10 +92,10 @@ export default function Home() {
 	const [regions, setRegions] = useState<FeatureData[]>(regionDataMemoized);
 	const [disease, setDisease] = useState<Disease>({
 		name: 'COVID-19',
-		immunityTime: 365,
 		lethality: 0.1,
 		requiredVaccines: 2,
 		virability: 0.1,
+		incubationTime: 14,
 	});
 	const [startPickMode, setStartPickMode] = useState(false);
 	const [startingRegion, setStartingRegion] = useState<FeatureData | null>(null);
@@ -143,10 +156,15 @@ export default function Home() {
 
 	useEffect(() => {
 		setTotalStats({
-			population: regions.reduce((acc, region) => acc + region.population, 0),
-			infected: regions.reduce((acc, region) => acc + region.infected, 0),
-			immune: regions.reduce((acc, region) => acc + region.immune, 0),
-			dead: regions.reduce((acc, region) => acc + region.dead, 0)
+			// population: regions.reduce((acc, region) => acc + region.population, 0),
+			// infected: regions.reduce((acc, region) => acc + region.infected, 0),
+			// immune: regions.reduce((acc, region) => acc + region.immune, 0),
+			// dead: regions.reduce((acc, region) => acc + region.dead, 0)
+		// 	population is the length of all people
+			population: regions.reduce((acc, region) => acc + region.people.length, 0),
+			infected: regions.reduce((acc, region) => acc + region.people.filter((person) => person.infected).length, 0),
+			immune: regions.reduce((acc, region) => acc + region.people.filter((person) => person.immune).length, 0),
+			dead: regions.reduce((acc, region) => acc + region.people.filter((person) => person.dead).length, 0)
 		})
 	}, [regions]);
 
@@ -159,110 +177,75 @@ export default function Home() {
 
 
 		const newRegions = regions.map((region, index) => {
-			if (region.infected === 0 && elapsedTime > 5) return region;
-			if (region.immune >= region.population - region.dead) return region;
-			if (region.dead >= region.population) return region;
-			if (region.infected >= region.population) return region;
-			if (region.infected < 0) {
-				region.infected = 0;
-				return region;
-			}
+			if (region.people.length === 0) return region;
+			if (region.people.every((person) => person.dead || person.immune)) return region;
 
 			const newRegion = newSpreads.find((r) => r.id_3 === region.id_3) || region;
-			if (sRegion?.infected === 0 && sRegion?.id_3 === newRegion?.id_3) {
-				newRegion.infected = 1;
+
+			if (sRegion?.id_3 === newRegion?.id_3) {
+				newRegion.people[0].infected = true;
+				newRegion.people[0].infectedAt = elapsedTime;
 			}
-
-			// In-region spread
-			if (newRegion.infected > 0 && newRegion.infected < newRegion.population) {
-
-				if (newRegion.infected >= 10) {
-					const newInfected = Math.floor(newRegion.infected * disease.virability);
-					newRegion.infected += newInfected;
+			// If there's infected people, spread the disease
+			if (newRegion.people.some((person) => person.infected)) {
+				// If there's more than 10 infected people, spread the disease to the next currentNum * virability
+				console.log(`[${
+					newRegion.name_3
+				}]Infected: ${newRegion.people.filter((person) => person.infected).length} / ${newRegion.people.length}`)
+				if (newRegion.people.filter((person) => person.infected).length >= 10) {
+					console.log("More than 10 infected, spreading")
+					const newInfected = Math.floor(newRegion.people.filter((person) => person.infected).length * disease.virability);
+					console.log(`We'll spread to ${newInfected} people`)
+					// Spread the disease to newInfected people
+					for (let i = 0; i < newInfected; i++) {
+						const randomPerson = newRegion.people.find((person) => !person.infected);
+						if (!randomPerson) return region;
+						randomPerson.infected = true;
+						randomPerson.infectedAt = elapsedTime;
+					}
 				} else {
-					newRegion.infected += 1;
-				}
+					// Spread the disease to 1 person
+					console.log("Less than 10 infected, spreading to 1 person")
+					const randomPerson = newRegion.people.find((person) => !person.infected);
+					console.log(randomPerson)
+					if (!randomPerson) return region;
+					randomPerson.infected = true;
+					randomPerson.infectedAt = elapsedTime;
 
-				if (newRegion.infected >= newRegion.population) {
-					newRegion.infected = newRegion.population;
 				}
 			}
 
-			// Cross-region spread
-			if (newRegion.infected / newRegion.population * 100 >= 0.1) {
+			// If the current region has more than 10 infected people, spread the disease to the nearest regions
+			if (newRegion.people.filter((person) => person.infected).length >= 10) {
 				let nearest = pointIndex.nearestLayer([newRegion.longitude, newRegion.latitude], 300);
-
 				// @ts-ignore
 				nearest = nearest.map((n) => {
 					const reg = regions.find((r) => r.id_3 === n.layer.feature.properties.id_3);
 					return reg
 				});
-
 				// @ts-ignore
-
 				nearest.forEach((n) => {
 					const nearestRegion = regions.find((r) => r.id_3 === n.id_3);
 					if (nearestRegion) {
-						setNewSpreads((prevSpreads) => [...prevSpreads, {...nearestRegion, infected: 1}]);
+						setNewSpreads((prevSpreads) => [...prevSpreads, {...nearestRegion, people: [...nearestRegion.people, {infected: true, infectedAt: elapsedTime, immune: false, dead: false}]}]);
 					}
 				});
 			}
-
-			// Lethality
-			if (newRegion.infected > 0 && elapsedTime > 10) {
-				if (Math.random() > 0.5) {
-
-					const dead = Math.floor(newRegion.infected * disease.lethality);
-					newRegion.infected -= dead;
-					newRegion.dead += dead;
-				}
+			// If the incubation time has passed, the person either dies or becomes immune.
+			// Immunity chance is 1 - lethality chance
+			if (newRegion.people.some((person) => person.infected)) {
+				newRegion.people.forEach((person) => {
+					if (person.infected && elapsedTime - person.infectedAt >= disease.incubationTime) {
+						if (Math.random() > disease.lethality) {
+							person.immune = true;
+							person.infected = false;
+						} else {
+							person.dead = true;
+							person.infected = false;
+						}
+					}
+				})
 			}
-
-			// Immunity
-			if (newRegion.infected > 0 && elapsedTime > 10) {
-				//  50% chance to just don't do anything
-				if (Math.random() > 0.5) {
-				const immunityChance = 1 - disease.lethality;
-				const immunity = Math.floor(newRegion.infected * immunityChance);
-				newRegion.infected -= immunity;
-				newRegion.immune += immunity;
-				}
-			}
-
-			// Vaccines
-			// if (newRegion.infected > 0) {
-			// 	setTimeout(() => {
-			// 		newRegion.infected -= newRegion.immune * disease.requiredVaccines;
-			// 		newRegion.immune += newRegion.immune * disease.requiredVaccines;
-			// 	}, 10000);
-			// }
-
-			// End state (either dead or immune)
-			// if (newRegion.infected > 0) {
-			// 	setTimeout(() => {
-			// 		newRegion.infected = 0;
-			// 		newRegion.immune = newRegion.population - newRegion.dead;
-			// 	}, 10000);
-			// }
-
-			// clean up negative values and dead + immune + infected > population
-			if (newRegion.infected < 0) newRegion.infected = 0;
-			if (newRegion.dead < 0) newRegion.dead = 0;
-			if (newRegion.immune < 0) newRegion.immune = 0;
-			if (newRegion.infected + newRegion.immune + newRegion.dead > newRegion.population) {
-				newRegion.infected = newRegion.population - newRegion.immune - newRegion.dead;
-				newRegion.immune = newRegion.population - newRegion.infected - newRegion.dead;
-				newRegion.dead = newRegion.population - newRegion.infected - newRegion.immune;
-			}
-			if (newRegion.dead + newRegion.immune + newRegion.infected > newRegion.population) {
-				newRegion.dead = newRegion.population - newRegion.immune - newRegion.infected;
-			}
-
-			if (newRegion.dead >= newRegion.population) {
-				newRegion.dead = newRegion.population;
-			}
-
-
 
 			return newRegion;
 		});
@@ -273,7 +256,7 @@ export default function Home() {
 	useEffect(() => {
 		const interval = setInterval(() => {
 			gameLoop();
-		}, 1000);
+		}, 2000);
 		return () => clearInterval(interval);
 	}, [gameLoop]);
 
@@ -297,9 +280,10 @@ export default function Home() {
 					</div>
 				)
 			}
-			<div className={'absolute top-0 left-0 right-0 p-4'}>
+			<div className={'absolute top-0 left-0 right-0 p-4 z-[10]'}>
 				<h1 className={'text-2xl text-white font-bold'}>Total stats</h1>
 				<div className={'flex flex-col gap-1'}>
+					<p className={'text-white'}>{elapsedTime} days passed</p>
 					<p className={'text-white'}>{totalStats.population} inhabitants</p>
 					<p className={'text-white'}>{totalStats.infected} infected</p>
 					<p className={'text-white'}>{totalStats.immune} immune</p>
@@ -338,20 +322,21 @@ export default function Home() {
 						return {
 							fillColor: (() => {
 								if (!region) return '#000000';
-								if (region.immune >= region.population - region.dead) return '#0000ff';
-								const percentage = region.infected / (region.population - region.immune - region.dead);
+								if (region.people.every((person) => person.dead || person.immune)) return '#0000ff';
+								const percentage = region.people.filter((person) => person.infected).length / (region.people.length - region.people.filter((person) => person.immune || person.dead).length);
+
 								const red = Math.floor(percentage * 255);
 								const green = Math.floor((1 - percentage) * 255);
 								return `rgb(${red}, ${green}, 0)`;
 							})(),
 							fillOpacity: (() => {
 								if (!region) return 0.7;
-								const percentage = region.dead / region.population;
+								const percentage = region.people.filter((person) => person.dead).length / region.people.length;
 								return 0.7 - percentage;
 							})(),
 							color: (() => {
 								if (!region || !startingRegion) return 'gray';
-								const percentage = region.immune / (region.population - region.dead)
+								const percentage = region.people.filter((person) => person.immune).length / (region.people.length - region.people.filter((person) => person.dead).length);
 								const red = Math.floor(percentage * 255);
 								const green = Math.floor((0.8 - percentage) * 255);
 								return `rgb(${green}, ${red}, 0)`;
@@ -380,12 +365,19 @@ export default function Home() {
 							const region = regions.find((region) => region.id_3 === hoveredRegion?.id_3);
 							if (!region) return;
 
+							const stats = {
+								population: region.people.length,
+								infected: region.people.filter((person) => person.infected).length,
+								immune: region.people.filter((person) => person.immune).length,
+								dead: region.people.filter((person) => person.dead).length
+							}
+
 							return (
 								<>
-									<p className={'text-white'}>{region.population} inhabitants</p>
-									<p className={'text-white'}>{region.infected} infected</p>
-									<p className={'text-white'}>{region.immune} immune</p>
-									<p className={'text-white'}>{region.dead} dead</p>
+									<p className={'text-white'}>{stats.population} inhabitants</p>
+									<p className={'text-white'}>{stats.infected} infected</p>
+									<p className={'text-white'}>{stats.immune} immune</p>
+									<p className={'text-white'}>{stats.dead} dead</p>
 								</>
 							)
 						})()
@@ -404,7 +396,7 @@ export default function Home() {
 					<div className={'flex flex-col gap-4'}>
 						<div className={'flex flex-col gap-1'}>
 							<label htmlFor="disease-name" className={'text-gray-200'}>Name</label>
-							<input type="text" className={'bg-neutral-800 rounded-lg text-white p-2'}
+							<input type="text" className={'bg-neutral-800 rounded-lg text-white p-2 z-[999999]'}
 								   onChange={(e) => {
 									   if (!e.target.value) return;
 									   setDisease({...disease, name: e.target.value});
@@ -413,15 +405,15 @@ export default function Home() {
 							/>
 						</div>
 						<div className={'flex flex-col gap-1'}>
-							<label htmlFor="disease-immunity-time" className={'text-gray-200'}>Immunity time</label>
-							<p className={'text-gray-200 text-sm'}>How many days until a person is immune after being infected</p>
+							<label htmlFor="disease-immunity-time" className={'text-gray-200'}>Incubation time</label>
+							<p className={'text-gray-200 text-sm'}>How many days until a person either dies or becomes immune</p>
 							<input type="number" className={'bg-neutral-800 rounded-lg text-white p-2'}
 								   onChange={(e) => {
 									   if (!e.target.value) return;
-									   setDisease({...disease, immunityTime: parseInt(e.target.value)});
+									   setDisease({...disease, incubationTime: parseInt(e.target.value)});
 								   }
 								   }
-								   placeholder={disease.immunityTime.toString()}
+								   placeholder={disease.incubationTime.toString()}
 							/>
 						</div>
 						<div className={'flex flex-col gap-1'}>
@@ -436,19 +428,6 @@ export default function Home() {
 								   }
 								   }
 								   placeholder={disease.lethality.toString()}
-							/>
-						</div>
-						<div className={'flex flex-col gap-1'}>
-							<label htmlFor="disease-required-vaccines" className={'text-gray-200'}>Required
-								vaccines</label>
-							<p className={'text-gray-200 text-sm'}>How many vaccines are required to be immune</p>
-							<input type="number" className={'bg-neutral-800 rounded-lg text-white p-2'}
-								   onChange={(e) => {
-									   if (!e.target.value) return;
-									   setDisease({...disease, requiredVaccines: parseInt(e.target.value)});
-								   }
-								   }
-								   placeholder={disease.requiredVaccines.toString()}
 							/>
 						</div>
 						<div className={'flex flex-col gap-1'}>
@@ -496,7 +475,7 @@ export default function Home() {
 											   }));
 										   }
 										   }
-										   placeholder={selectedRegion ? regions.find((region) => region.id_3 === selectedRegion?.id_3)?.population.toString() : ''}
+											placeholder={selectedRegion ? regions.find((region) => region.id_3 === selectedRegion?.id_3)?.people.length.toString() : ''}
 									/>
 								</div>
 								<div className={'flex flex-col gap-1'}>
@@ -514,7 +493,7 @@ export default function Home() {
 											   }));
 										   }
 										   }
-										   placeholder={selectedRegion ? regions.find((region) => region.id_3 === selectedRegion?.id_3)?.infected.toString() : ''}
+											placeholder={selectedRegion ? regions.find((region) => region.id_3 === selectedRegion?.id_3)?.people.filter((person) => person.infected).length.toString() : ''}
 									/>
 								</div>
 								<div className={'flex flex-col gap-1'}>
@@ -532,7 +511,7 @@ export default function Home() {
 											   }));
 										   }
 										   }
-										   placeholder={selectedRegion ? regions.find((region) => region.id_3 === selectedRegion?.id_3)?.immune.toString() : ''}
+											placeholder={selectedRegion ? regions.find((region) => region.id_3 === selectedRegion?.id_3)?.people.filter((person) => person.immune).length.toString() : ''}
 									/>
 								</div>
 								<div className={'flex flex-col gap-1'}>
@@ -550,77 +529,7 @@ export default function Home() {
 											   }));
 										   }
 										   }
-										   placeholder={selectedRegion ? regions.find((region) => region.id_3 === selectedRegion?.id_3)?.dead.toString() : ''}
-									/>
-								</div>
-								<h3 className={'text-xl text-white font-bold mb-1 mt-4'}>Measures</h3>
-								<div className={'inline-flex gap-8'}>
-									<label htmlFor="region-has-distancing" className={'text-gray-200'}>Social
-										distancing</label>
-									<input type="checkbox" className={'bg-neutral-800 rounded-lg text-white p-2'}
-										   onChange={(e) => {
-											   const region = regions.find((region) => region.id_3 === selectedRegion?.id_3);
-											   if (!region) return;
-											   setRegions(regions.map((region) => {
-												   if (region.id_3 === selectedRegion?.id_3) {
-													   return {...region, hasDistancing: e.target.checked};
-												   }
-												   return region;
-											   }));
-										   }
-										   }
-										   checked={selectedRegion ? regions.find((region) => region.id_3 === selectedRegion?.id_3)?.hasDistancing : false}
-									/>
-								</div>
-								<div className={'inline-flex gap-8'}>
-									<label htmlFor="region-has-masks" className={'text-gray-200'}>Masks</label>
-									<input type="checkbox" className={'bg-neutral-800 rounded-lg text-white p-2'}
-										   onChange={(e) => {
-											   const region = regions.find((region) => region.id_3 === selectedRegion?.id_3);
-											   if (!region) return;
-											   setRegions(regions.map((region) => {
-												   if (region.id_3 === selectedRegion?.id_3) {
-													   return {...region, hasMasks: e.target.checked};
-												   }
-												   return region;
-											   }));
-										   }
-										   }
-										   checked={selectedRegion ? regions.find((region) => region.id_3 === selectedRegion?.id_3)?.hasMasks : false}
-									/>
-								</div>
-								<div className={'inline-flex gap-8'}>
-									<label htmlFor="region-has-lockdown" className={'text-gray-200'}>Lockdown</label>
-									<input type="checkbox" className={'bg-neutral-800 rounded-lg text-white p-2'}
-										   onChange={(e) => {
-											   const region = regions.find((region) => region.id_3 === selectedRegion?.id_3);
-											   if (!region) return;
-											   setRegions(regions.map((region) => {
-												   if (region.id_3 === selectedRegion?.id_3) {
-													   return {...region, hasLockdown: e.target.checked};
-												   }
-												   return region;
-											   }));
-										   }
-										   }
-										   checked={selectedRegion ? regions.find((region) => region.id_3 === selectedRegion?.id_3)?.hasLockdown : false}
-									/>
-								</div>
-								<div className={'inline-flex gap-8'}>
-									<label htmlFor="region-has-vaccines" className={'text-gray-200'}>Vaccines</label>
-									<input type="checkbox" className={'bg-neutral-800 rounded-lg text-white p-2'}
-										   onChange={(e) => {
-											   const region = regions.find((region) => region.id_3 === selectedRegion?.id_3);
-											   if (!region) return;
-											   setRegions(regions.map((region) => {
-												   if (region.id_3 === selectedRegion?.id_3) {
-													   return {...region, hasVaccines: e.target.checked};
-												   }
-												   return region;
-											   }));
-										   }
-										   }
-										   checked={selectedRegion ? regions.find((region) => region.id_3 === selectedRegion?.id_3)?.hasVaccines : false}
+											placeholder={selectedRegion ? regions.find((region) => region.id_3 === selectedRegion?.id_3)?.people.filter((person) => person.dead).length.toString() : ''}
 									/>
 								</div>
 							</div>
@@ -628,7 +537,7 @@ export default function Home() {
 					}
 				</div>
 			</div>
-			<div className={'p-4 absolute top-0 right-0 '}>
+			<div className={'p-4 absolute top-0 right-0 z-[9999]'}>
 				<button onClick={() => setSidebarOpen(!sidebarOpen)} className={'text-white text-2xl font-bold'}>☰
 				</button>
 			</div>
