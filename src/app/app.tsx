@@ -1,4 +1,5 @@
 'use client';
+
 // @ts-nocheck
 import regionDataJson from '../../public/bosnia.json';
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
@@ -72,11 +73,6 @@ export default function Home() {
 	const regionDataMemoized = (regionDataJson as any).features.map((feature: any) => {
 		return {
 			...feature.properties,
-			// population: Math.floor(Math.random() * 10000),
-			// infected: 0,
-			// immune: 0,
-			// dead: 0,
-			// we use actual people now
 			people: Array.from({length: Math.floor(Math.random() * 10000)}, () => {
 				return {
 					infected: false,
@@ -424,7 +420,7 @@ export default function Home() {
 									   if (!e.target.value) return;
 									   if (parseInt(e.target.value) > 1) e.target.value = '1';
 									   if (parseInt(e.target.value) < 0) e.target.value = '0';
-									   setDisease({...disease, lethality: parseInt(e.target.value)});
+									   setDisease({...disease, lethality: parseFloat(e.target.value)});
 								   }
 								   }
 								   placeholder={disease.lethality.toString()}
@@ -438,7 +434,7 @@ export default function Home() {
 									   if (!e.target.value) return;
 									   if (parseInt(e.target.value) > 1) e.target.value = '1';
 									   if (parseInt(e.target.value) < 0) e.target.value = '0';
-									   setDisease({...disease, virability: parseInt(e.target.value)});
+									   setDisease({...disease, virability: parseFloat(e.target.value)});
 								   }
 								   }
 								   placeholder={disease.virability.toString()}
